@@ -26,6 +26,7 @@ enum
 	OGG_PCM,
 	OGG_SPEEX,
 	OGG_VORBIS,
+	OGG_OPUS,
 } ;
 
 typedef struct

@@ -23,14 +23,14 @@ system is documented below.
 Setting up a build environment for libsndfile on Debian or Ubuntu is as simple as:
 ```
 sudo apt install autoconf autogen automake build-essential libasound2-dev \
-    libflac-dev libogg-dev libtool libvorbis-dev pkg-config python
+    libflac-dev libogg-dev libtool libvorbis-dev libopus-dev pkg-config python
 ````
 For other Linux distributions or any of the *BSDs, the setup should be similar
 although the package install tools and package names may be slightly different.
 
 Similarly on Mac OS X, assuming [brew] is already installed:
 ```
-brew install autoconf autogen automake flac libogg libtool libvorbis pkg-config
+brew install autoconf autogen automake flac libogg libtool libvorbis libopus pkg-config
 ```
 Once the build environment has been set up, building and testing libsndfile is
 as simple as:
@@ -58,7 +58,7 @@ Unix Makefiles, Xcode projects and [many more](https://cmake.org/cmake/help/late
 
 There are some recommended packages to enable all features of libsndfile:
 
-1. Ogg, Vorbis and FLAC libraries and headers to enable these formats support
+1. Ogg, Opus, Vorbis and FLAC libraries and headers to enable these formats support
 2. ALSA development package under Linux to build sndfile-play utility
 3. Sndio development package under BSD to build sndfile-play utility
 
@@ -118,7 +118,7 @@ You can pass additional options with `/D<parameter>=<value>` when you run
  * `BUILD_PROGRAMS` - build libsndfile's utilities from `programs/` directory
  * `BUILD_EXAMPLES` - build examples
  * `BUILD_TESTING` - build tests. Then you can run tests with `ctest` command
- * `DISABLE_EXTERNAL_LIBS` - disable Ogg, Vorbis and FLAC support
+ * `DISABLE_EXTERNAL_LIBS` - disable Ogg, Opus, Vorbis and FLAC support
  * `DISABLE_CPU_CLIP` - disable tricky cpu specific clipper. Don't touch it if
    you are not sure.
  * `ENABLE_BOW_DOCS` - enable black-on-white documentation theme
@@ -133,14 +133,15 @@ You can pass additional options with `/D<parameter>=<value>` when you run
 First advice - set `ENABLE_STATIC_RUNTIME` to ON. This will remove dependencies
 on runtime DLLs.
 
-Second advice is about Ogg, Vorbis and FLAC support. Searching external
+Second advice is about Ogg, Opus, Vorbis and FLAC support. Searching external
 libraries under Windows is a little bit tricky. The best wayis to use
-[Vcpkg](https://github.com/Microsoft/vcpkg). You need to install static libogg,
+[Vcpkg](https://github.com/Microsoft/vcpkg). You need to install static libogg, libopus,
 libvorbis and libflac libraries:
 
     vcpkg install libogg:x64-windows-static libvorbis:x64-windows-static
 	libflac:x64-windows-static libogg:x86-windows-static
 	libvorbis:x86-windows-static libflac:x86-windows-static
+    opus:x86-windows-static opus:x64-windows-static
 
 Then and add this parameter to cmake command line:
 

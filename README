@@ -35,8 +35,8 @@ If you really do need to compile from source it should be as easy as:
 		make
 		make install
 
-Since libsndfile optionally links against libFLAC, libogg and libvorbis, you
-will need to install appropriate versions of these libraries before running
+Since libsndfile optionally links against libFLAC, libogg, libopus and libvorbis,
+you will need to install appropriate versions of these libraries before running
 configure as above.
 
 You can use CMake now to build under Linux, also under Windows and MacOS, see

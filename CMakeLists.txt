@@ -50,7 +50,7 @@ option (BUILD_PROGRAMS "Build programs" ON)
 option (BUILD_EXAMPLES "Build examples" ON)
 option (BUILD_TESTING "Build tests" ON)
 option (ENABLE_CPACK "Enable CPack support" ON)
-option (DISABLE_EXTERNAL_LIBS "Disable use of FLAC, Ogg and Vorbis" OFF)
+option (DISABLE_EXTERNAL_LIBS "Disable use of FLAC, Ogg, Opus and Vorbis" OFF)
 option (ENABLE_EXPERIMENTAL "Enable experimental code" OFF)
 option (DISABLE_CPU_CLIP "Disable tricky cpu specific clipper" OFF)
 option (ENABLE_BOW_DOCS "Enable black-on-white html docs" OFF)
@@ -83,7 +83,7 @@ cmake_dependent_option (BUILD_REGTEST "Build regtest" ON "HAVE_SQLITE3" OFF)
 
 add_feature_info(BUILD_STATIC_LIBS BUILD_STATIC_LIBS "build static libraries")
 add_feature_info(BUILD_SHARED_LIBS BUILD_SHARED_LIBS "build shared libraries")
-add_feature_info(DISABLE_EXTERNAL_LIBS DISABLE_EXTERNAL_LIBS "disable use of FLAC, Ogg and Vorbis")
+add_feature_info(DISABLE_EXTERNAL_LIBS DISABLE_EXTERNAL_LIBS "disable use of FLAC, Ogg, Opus and Vorbis")
 add_feature_info(ENABLE_EXPERIMENTAL ENABLE_EXPERIMENTAL "enable experimental code")
 add_feature_info(BUILD_TESTING BUILD_TESTING "build tests")
 add_feature_info(BUILD_REGTEST BUILD_REGTEST "build regtest")
@@ -108,6 +108,10 @@ set_package_properties(FLAC PROPERTIES TYPE RECOMMENDED
 	URL "www.xiph.org/flac/"
 	DESCRIPTION "Free Lossless Audio Codec Library"
 	PURPOSE "Enables FLAC support")
+set_package_properties(Opus PROPERTIES TYPE RECOMMENDED
+	URL "opus-codec.org"
+	DESCRIPTION "Open source, low latency high quality audio codec"
+	PURPOSE "Enables Opus support")
 set_package_properties(Speex PROPERTIES TYPE OPTIONAL
 	URL "www.speex.org/"
 	DESCRIPTION "an audio codec tuned for speech"
@@ -317,7 +321,8 @@ if (BUILD_STATIC_LIBS)
 		target_include_directories (${SNDFILE_STATIC_TARGET} PRIVATE
 			${OGG_INCLUDE_DIRS}
 			${VORBIS_INCLUDE_DIRS}
-			${FLAC_INCLUDE_DIRS})
+			${FLAC_INCLUDE_DIRS}
+			${OPUS_INCLUDE_DIRS})
 			target_compile_definitions (${SNDFILE_STATIC_TARGET} PRIVATE ${FLAC_DEFINITIONS})
 		if (ENABLE_EXPERIMENTAL)
 			target_link_libraries (${SNDFILE_STATIC_TARGET} PUBLIC ${SPEEX_LIBRARIES})
@@ -370,7 +375,8 @@ if (BUILD_SHARED_LIBS)
 		target_include_directories (${SNDFILE_SHARED_TARGET} PRIVATE
 			${OGG_INCLUDE_DIRS}
 			${VORBIS_INCLUDE_DIRS}
-			${FLAC_INCLUDE_DIRS})
+			${FLAC_INCLUDE_DIRS}
+			${OPUS_INCLUDE_DIRS})
 			target_compile_definitions (${SNDFILE_SHARED_TARGET} PRIVATE ${FLAC_DEFINITIONS})
 		if (ENABLE_EXPERIMENTAL)
 			target_link_libraries (${SNDFILE_SHARED_TARGET} PRIVATE ${SPEEX_LIBRARIES})

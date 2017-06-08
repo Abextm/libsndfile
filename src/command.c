@@ -69,6 +69,10 @@ static SF_FORMAT_INFO const simple_formats [] =
 	{	SF_FORMAT_OGG | SF_FORMAT_VORBIS,
 		"Ogg Vorbis (Xiph Foundation)", "oga"
 		},
+	
+	{ SF_FORMAT_OGG | SF_FORMAT_OPUS,
+		"Opus (Xiph Foundation)", "opus"
+		},
 #endif
 
 	{	SF_FORMAT_WAV | SF_FORMAT_PCM_16,
@@ -173,42 +177,43 @@ psf_get_format_major (SF_FORMAT_INFO *data)
 
 static SF_FORMAT_INFO subtype_formats [] =
 {
-	{	SF_FORMAT_PCM_S8,		"Signed 8 bit PCM",		NULL 	},
-	{	SF_FORMAT_PCM_16,		"Signed 16 bit PCM",	NULL 	},
-	{	SF_FORMAT_PCM_24,		"Signed 24 bit PCM",	NULL 	},
-	{	SF_FORMAT_PCM_32,		"Signed 32 bit PCM",	NULL 	},
+	{ SF_FORMAT_PCM_S8,        "Signed 8 bit PCM",     NULL  },
+	{ SF_FORMAT_PCM_16,        "Signed 16 bit PCM",    NULL  },
+	{ SF_FORMAT_PCM_24,        "Signed 24 bit PCM",    NULL  },
+	{ SF_FORMAT_PCM_32,        "Signed 32 bit PCM",    NULL  },
 
-	{	SF_FORMAT_PCM_U8,		"Unsigned 8 bit PCM",	NULL 	},
+	{ SF_FORMAT_PCM_U8,        "Unsigned 8 bit PCM",   NULL  },
 
-	{	SF_FORMAT_FLOAT,		"32 bit float",			NULL 	},
-	{	SF_FORMAT_DOUBLE,		"64 bit float",			NULL 	},
+	{ SF_FORMAT_FLOAT,         "32 bit float",         NULL  },
+	{ SF_FORMAT_DOUBLE,        "64 bit float",         NULL  },
 
-	{	SF_FORMAT_ULAW,			"U-Law",				NULL 	},
-	{	SF_FORMAT_ALAW,			"A-Law",				NULL 	},
-	{	SF_FORMAT_IMA_ADPCM,	"IMA ADPCM",			NULL 	},
-	{	SF_FORMAT_MS_ADPCM,		"Microsoft ADPCM",		NULL 	},
+	{ SF_FORMAT_ULAW,          "U-Law",                NULL  },
+	{ SF_FORMAT_ALAW,          "A-Law",                NULL  },
+	{ SF_FORMAT_IMA_ADPCM,     "IMA ADPCM",            NULL  },
+	{ SF_FORMAT_MS_ADPCM,      "Microsoft ADPCM",      NULL  },
 
-	{	SF_FORMAT_GSM610,		"GSM 6.10",				NULL 	},
+	{ SF_FORMAT_GSM610,        "GSM 6.10",             NULL  },
 
-	{	SF_FORMAT_G721_32,		"32kbs G721 ADPCM",		NULL 	},
-	{	SF_FORMAT_G723_24,		"24kbs G723 ADPCM",		NULL 	},
+	{ SF_FORMAT_G721_32,       "32kbs G721 ADPCM",     NULL  },
+	{ SF_FORMAT_G723_24,       "24kbs G723 ADPCM",     NULL  },
 
-	{	SF_FORMAT_DWVW_12,		"12 bit DWVW",			NULL 	},
-	{	SF_FORMAT_DWVW_16,		"16 bit DWVW",			NULL 	},
-	{	SF_FORMAT_DWVW_24,		"24 bit DWVW",			NULL 	},
-	{	SF_FORMAT_VOX_ADPCM,	"VOX ADPCM",			"vox" 	},
+	{ SF_FORMAT_DWVW_12,       "12 bit DWVW",          NULL  },
+	{ SF_FORMAT_DWVW_16,       "16 bit DWVW",          NULL  },
+	{ SF_FORMAT_DWVW_24,       "24 bit DWVW",          NULL  },
+	{ SF_FORMAT_VOX_ADPCM,     "VOX ADPCM",            "vox" },
 
-	{	SF_FORMAT_DPCM_16,		"16 bit DPCM",			NULL 	},
-	{	SF_FORMAT_DPCM_8,		"8 bit DPCM",			NULL 	},
+	{ SF_FORMAT_DPCM_16,       "16 bit DPCM",          NULL  },
+	{ SF_FORMAT_DPCM_8,        "8 bit DPCM",           NULL  },
 
 #if HAVE_EXTERNAL_XIPH_LIBS
-	{	SF_FORMAT_VORBIS,		"Vorbis",				NULL 	},
+	{ SF_FORMAT_VORBIS,        "Vorbis",               NULL  },
+	{ SF_FORMAT_OPUS,          "Opus",                 NULL  },
 #endif
 
-	{	SF_FORMAT_ALAC_16,		"16 bit ALAC",			NULL	},
-	{	SF_FORMAT_ALAC_20,		"20 bit ALAC",			NULL	},
-	{	SF_FORMAT_ALAC_24,		"24 bit ALAC",			NULL	},
-	{	SF_FORMAT_ALAC_32,		"32 bit ALAC",			NULL	},
+	{ SF_FORMAT_ALAC_16,       "16 bit ALAC",          NULL  },
+	{ SF_FORMAT_ALAC_20,       "20 bit ALAC",          NULL  },
+	{ SF_FORMAT_ALAC_24,       "24 bit ALAC",          NULL  },
+	{ SF_FORMAT_ALAC_32,       "32 bit ALAC",          NULL  },
 } ; /* subtype_formats */
 
 int

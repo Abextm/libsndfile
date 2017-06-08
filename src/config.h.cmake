@@ -40,7 +40,7 @@
 /* Define to 1 if you have the <endian.h> header file. */
 #cmakedefine01 HAVE_ENDIAN_H
 
-/* Will be set to 1 if flac, ogg and vorbis are available. */
+/* Will be set to 1 if flac, ogg, opus and vorbis are available. */
 #cmakedefine01 HAVE_EXTERNAL_XIPH_LIBS
 
 /* Define to 1 if you have the `floor' function. */

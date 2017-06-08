@@ -734,6 +734,7 @@ enum
 	SFE_ALAC_FAIL_TMPFILE,
 	SFE_FILENAME_TOO_LONG,
 	SFE_NEGATIVE_RW_LEN,
+	SFE_END_OF_FILE,
 
 	SFE_MAX_ERROR			/* This must be last in list. */
 } ;

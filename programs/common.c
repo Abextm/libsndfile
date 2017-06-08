@@ -456,6 +456,7 @@ sfe_codec_name (int format)
 		case SF_FORMAT_DPCM_8 : return "8 bit DPCM" ;
 		case SF_FORMAT_DPCM_16 : return "16 bit DPCM" ;
 		case SF_FORMAT_VORBIS : return "Vorbis" ;
+		case SF_FORMAT_OPUS : return "Opus" ;
 		case SF_FORMAT_ALAC_16 : return "16 bit ALAC" ;
 		case SF_FORMAT_ALAC_20 : return "20 bit ALAC" ;
 		case SF_FORMAT_ALAC_24 : return "24 bit ALAC" ;

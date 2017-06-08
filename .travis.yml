@@ -10,6 +10,7 @@ matrix:
         apt:
           packages:
             - libogg-dev
+            - libopus-dev
             - libvorbis-dev
             - libflac-dev
             - libasound2-dev
@@ -20,6 +21,7 @@ matrix:
         apt:
           packages:
             - libogg-dev
+            - libopus-dev
             - libvorbis-dev
             - libflac-dev
             - libasound2-dev
@@ -30,7 +32,7 @@ matrix:
 before_install:
   - |
     if [[ "${TRAVIS_OS_NAME}" == "osx" ]]; then
-      brew install autogen flac libogg libvorbis
+      brew install autogen flac libogg libopus libvorbis
     fi
 
 install:

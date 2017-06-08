@@ -26,6 +26,7 @@
 *.oct
 *.oga
 *.ogg
+*.opus
 *.paf
 *.raw
 *.rifx

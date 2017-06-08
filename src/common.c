@@ -1547,6 +1547,7 @@ str_of_minor_format (int format)
 		CASE_NAME (SF_FORMAT_DPCM_8) ;
 		CASE_NAME (SF_FORMAT_DPCM_16) ;
 		CASE_NAME (SF_FORMAT_VORBIS) ;
+		CASE_NAME (SF_FORMAT_OPUS) ;
 		default :
 			break ;
 		} ;

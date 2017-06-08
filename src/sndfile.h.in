@@ -105,6 +105,7 @@ enum
 	SF_FORMAT_DPCM_16		= 0x0051,		/* 16 bit differential PCM (XI only) */
 
 	SF_FORMAT_VORBIS		= 0x0060,		/* Xiph Vorbis encoding. */
+	SF_FORMAT_OPUS			= 0x0061,		/* Xiph Opus encoding. */
 
 	SF_FORMAT_ALAC_16		= 0x0070,		/* Apple Lossless Audio Codec (16 bit). */
 	SF_FORMAT_ALAC_20		= 0x0071,		/* Apple Lossless Audio Codec (20 bit). */

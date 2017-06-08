@@ -79,6 +79,9 @@ ogg_open (SF_PRIVATE *psf)
 			psf->container_data = NULL ;
 			psf->container_close = NULL ;
 			return flac_open (psf) ;
+		
+		case SF_FORMAT_OGG | SF_FORMAT_OPUS :
+			return ogg_opus_open (psf) ;
 
 #if ENABLE_EXPERIMENTAL_CODE
 		case SF_FORMAT_OGG | SF_FORMAT_SPEEX :
@@ -186,6 +189,10 @@ ogg_stream_classify (SF_PRIVATE *psf, OGG_PRIVATE* odata)
 		case OGG_SPEEX :
 			psf->sf.format = SF_FORMAT_OGG | SF_FORMAT_SPEEX ;
 			return 0 ;
+		
+		case OGG_OPUS :
+			psf->sf.format = SF_FORMAT_OGG | SF_FORMAT_OPUS ;
+			return 0 ;
 
 		case OGG_PCM :
 			psf_log_printf (psf, "Detected Ogg/PCM data. This is not supported yet.\n") ;
@@ -195,7 +202,7 @@ ogg_stream_classify (SF_PRIVATE *psf, OGG_PRIVATE* odata)
 			break ;
 		} ;
 
-	psf_log_printf (psf, "This Ogg bitstream contains some uknown data type.\n") ;
+	psf_log_printf (psf, "This Ogg bitstream contains some unknown data type.\n") ;
 	return SFE_UNIMPLEMENTED ;
 } /* ogg_stream_classify */
 
@@ -213,6 +220,7 @@ static struct
 	{	"PCM     ",		"PCM",		8, OGG_PCM },
 	{	"Speex",		"Speex",	5, OGG_SPEEX },
 	{	"\001vorbis",	"Vorbis",	7, OGG_VORBIS },
+	{ "OpusHead"  ,	"Opus", 8, OGG_OPUS },
 } ;
 
 static int

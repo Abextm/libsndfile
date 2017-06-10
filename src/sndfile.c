@@ -830,6 +830,8 @@ sf_format_check	(const SF_INFO *info)
 					return 0 ;
 				if (subformat == SF_FORMAT_VORBIS)
 					return 1 ;
+				if (subformat == SF_FORMAT_OPUS)
+					return 1 ;
 				break ;
 
 		case SF_FORMAT_MPC2K :

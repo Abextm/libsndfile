@@ -257,6 +257,11 @@ psf_get_be16 (uint8_t *ptr, int offset)
 {	return (ptr [offset] << 8) + ptr [offset + 1] ;
 } /* psf_get_be16 */
 
+static inline int16_t
+psf_get_le16 (uint8_t *ptr, int offset)
+{	return ptr [offset] + (ptr [offset + 1]<< 8) ;
+} /* psf_get_le16 */
+
 /*-----------------------------------------------------------------------------------------------
 ** Generic functions for performing endian swapping on integer arrays.
 */

@@ -64,18 +64,12 @@ typedef struct
 		sf_count_t start, len, capacity ;
 	} pcm ;
 	/* Where decoding last started (file bytes)*/
-	sf_count_t last_start;
+	sf_count_t last_start ;
 	/* Number of samples decoded since last start */
-	sf_count_t samples_decoded;
+	sf_count_t samples_decoded ;
 	/* Current position. This is set so 0 is the first sample after,
 	   the preskip*/
-	sf_count_t current_sample;
-	/* Opus supports the first frame NOT being frame #0
-	   We need: 0 = first non-pre-skip frame
-		 ogg_opus_granule_to_frames(psf,odata->opacket.granulepos)-granule_shift is correct
-		 -1 means no audio has been decoded
-		 -2 means the end of the first page has not been hit*/
-	sf_count_t granule_shift;
+	sf_count_t current_sample ;
 } OPUS_PRIVATE ;
 
 
@@ -147,7 +141,6 @@ ogg_opus_open (SF_PRIVATE *psf)
 		{
 			oodata->last_start = psf_fseek (psf, 0, SEEK_CUR) ;
 		}
-		oodata->granule_shift=-1;
 
 		/* Opus likes to have a warm decoder, skip some stuff if requested */
 		ogg_opus_read_sample (psf, NULL,
@@ -158,41 +151,35 @@ ogg_opus_open (SF_PRIVATE *psf)
 		psf->read_int    = ogg_opus_read_i ;
 		psf->read_float  = ogg_opus_read_f ;
 		psf->read_double = ogg_opus_read_d ;
-		/* There are 3 options here.
-			1. Set it to the maximum.
-			2. Seek to the end of stream, and divide by bitrate. This is not correct but may me close enough?
-			3. Decode the entire file, add up samples, and seek back to the start.
-		*/
 		if (psf->sf.seekable)
 		{
-			for (;oodata->granule_shift<0;)
-			{
-				if(ogg_opus_read_sample (psf, NULL, 4800, opus_rnull)==0)
+			sf_count_t pos = psf_fseek (psf, -4096, SEEK_END) ;
+			for(;;)
+			{/* Seek from the back until we get a page, extract its granule */
+				ogg_sync_reset (&odata->osync) ;
+				error = ogg_opus_read_packet (psf, 1) ;
+				if (error==0)
 				{
 					break ;
 				}
+				pos = psf_fseek(psf, pos-4096, SEEK_SET) ;
+				if(pos<=0)
+				{
+					psf->sf.frames = SF_COUNT_MAX ;
+					break ;
+				}
 			}
-			sf_count_t frames = ogg_opus_samples_to_frames (psf, oodata->current_sample) ;
 			for(;;)
 			{
-				error = ogg_opus_read_packet (psf, 0) ;
 				if (error!=0)
 				{
-					if (error==SFE_END_OF_FILE)
-					{
-						break ;
-					}
-					return error ;
+					break ;
 				}
-				/* opus frames are not libsndfile frames. */
-				sf_count_t oframes = opus_packet_get_nb_frames (odata->opacket.packet, odata->opacket.bytes) ;
-				if (oframes>0)
-				{
-					frames += oframes*opus_packet_get_samples_per_frame (odata->opacket.packet, psf->sf.samplerate) ;
-				}
+				psf->sf.frames = ogg_opus_granule_to_frames (psf, odata->opacket.granulepos-oodata->preskip) ;
+				error = ogg_opus_read_packet (psf, 0);
 			}
-			psf->sf.frames = frames ;
-			ogg_opus_seek (psf, 0, 0) ;
+			oodata->current_sample = ogg_opus_frames_to_samples (psf, psf->sf.frames) ;
+			pos = ogg_opus_seek (psf, 0, 0) ;
 		}
 		else
 		{
@@ -275,11 +262,6 @@ ogg_opus_read_packet (SF_PRIVATE *psf, int init)
 				return 0 ;
 			}
 		}
-		if (oodata->granule_shift==-2)
-		{ /* At the end of the page & we dont know the granule offset. */
-			oodata->granule_shift = ogg_opus_granule_to_frames (psf, odata->opacket.granulepos)
-				-ogg_opus_samples_to_frames (psf, oodata->current_sample) ;
-		}
 		error = ogg_sync_pageout (&odata->osync, &odata->opage) ;
 		if (error == 1)
 		{
@@ -335,20 +317,21 @@ ogg_opus_read_header (SF_PRIVATE * psf, int log_data)
 		}
 		unsigned char *body = odata->opacket.packet;
 		/* Version */
-		int version = body[8] ;
-		if (version<1 || version>15)
+		unsigned char version = body[8] ;
+		if (version&0xF0==0)
 		{
 			psf_log_printf (psf, "Opus version %d is not implemented.\n ", (int)(body[8])) ;
 			return SFE_UNIMPLEMENTED ;
 		}
 		int channels = body[9] ;
 		psf->sf.channels = channels ;
-		oodata->preskip = psf_get_le16 (body, 10) ;
+		oodata->preskip = (uint16_t)psf_get_le16 (body, 10) ;
 		psf->sf.samplerate = psf_get_le32 (body, 12) ;
 		if (psf->sf.samplerate<8000 || psf->sf.samplerate>1000000)
 		{
 			psf->sf.samplerate = 48000 ;
 		}
+		oodata->current_sample=-ogg_opus_frames_to_samples (psf, ogg_opus_granule_to_frames (psf, oodata->preskip)) ;
 
 		int32_t raw_gain = psf_get_le16 (body, 16) ;
 
@@ -421,7 +404,7 @@ static sf_count_t
 ogg_opus_granule_to_frames (SF_PRIVATE *psf, sf_count_t granule)
 {
 	/* granules are time in 48k samples/sec. Convert to our samplerate */
-	return (granule*psf->sf.samplerate)/48000 ;
+	return (granule*48)/(psf->sf.samplerate/1000) ;
 }
 static sf_count_t
 ogg_opus_frames_to_samples (SF_PRIVATE *psf, sf_count_t frames)
@@ -457,23 +440,10 @@ ogg_opus_seek (SF_PRIVATE *psf, int UNUSED (filemode), sf_count_t newpos)
 	}
 	skip=ogg_opus_granule_to_frames (psf, 2*skip);
 
-	sf_count_t current_frame = ogg_opus_samples_to_frames (psf, oodata->current_sample)
-		- ogg_opus_granule_to_frames (psf, oodata->preskip) ;
+	sf_count_t current_frame = ogg_opus_samples_to_frames (psf, oodata->current_sample) ;
 	/* Have to seek backwards or more than 2*skip forward. Otherwise just skip some samples */
 	if (newpos<current_frame || newpos>(current_frame+(skip*2)))
 	{
-		/* ensure we know our granule_shift */
-		if (oodata->granule_shift<0)
-		{
-			for (int i=0;i<50&&oodata->granule_shift<0;i++)
-			{
-				ogg_opus_read_sample (psf, NULL, 4800, opus_rnull) ;
-			}
-			if (oodata->granule_shift<0)
-			{
-				oodata->granule_shift=0 ;
-			}
-		}
 		/* absolute of where to seek to */
 		sf_count_t newfipos = 0;
 		/* Simple case: seek to start */
@@ -489,7 +459,7 @@ ogg_opus_seek (SF_PRIVATE *psf, int UNUSED (filemode), sf_count_t newpos)
 			float framesize = (float)(fipos-oodata->last_start)/(float)ogg_opus_samples_to_frames (psf, oodata->samples_decoded) ;
 			newpos-=skip ;
 			/* calculate approx bytes to move*/
-			sf_count_t delta = (float)((ogg_opus_granule_to_frames (psf, odata->opacket.granulepos)-oodata->granule_shift)-newpos)*framesize ;
+			sf_count_t delta = (float)((ogg_opus_granule_to_frames (psf, odata->opacket.granulepos-oodata->preskip))-newpos)*framesize ;
 			newfipos = fipos - delta ;
 		}
 		for (;;)
@@ -505,11 +475,10 @@ ogg_opus_seek (SF_PRIVATE *psf, int UNUSED (filemode), sf_count_t newpos)
 			ogg_sync_reset (&odata->osync) ;
 			opus_multistream_decoder_ctl (oodata->dec, OPUS_RESET_STATE) ;
 			
-			
 			if(newfipos<=0)
 			{
 				/* We need to start decoding data immediatly */
-				oodata->current_sample = ogg_opus_frames_to_samples (psf, oodata->granule_shift) ;
+				oodata->current_sample=-ogg_opus_frames_to_samples (psf, ogg_opus_granule_to_frames (psf, oodata->preskip)) ;
 				break ;
 			}
 			else
@@ -529,7 +498,7 @@ ogg_opus_seek (SF_PRIVATE *psf, int UNUSED (filemode), sf_count_t newpos)
 				/* read the whole page, so the granule is where we start decoding, */
 				for (;ogg_stream_packetout (&odata->ostream, &odata->opacket)==1;)
 				oodata->samples_decoded=0 ;
-				sf_count_t current_frame = ogg_opus_granule_to_frames (psf, odata->opacket.granulepos)-oodata->granule_shift ;
+				sf_count_t current_frame = ogg_opus_granule_to_frames (psf, odata->opacket.granulepos-oodata->preskip) ;
 				oodata->current_sample=ogg_opus_frames_to_samples (psf, current_frame) ;
 
 				if (current_frame<=newpos)
@@ -542,7 +511,7 @@ ogg_opus_seek (SF_PRIVATE *psf, int UNUSED (filemode), sf_count_t newpos)
 		}
 	}
 	/* conusme samples up until target */
-	sf_count_t consume = ogg_opus_frames_to_samples (psf, orig_newpos)-(oodata->current_sample-ogg_opus_frames_to_samples (psf, ogg_opus_granule_to_frames(psf, oodata->preskip))) ;
+	sf_count_t consume = ogg_opus_frames_to_samples (psf, orig_newpos)-oodata->current_sample ;
 	if (consume>0)
 	{
 		ogg_opus_read_sample (psf, NULL, consume, opus_rnull) ;
@@ -598,10 +567,6 @@ ogg_opus_read_sample (SF_PRIVATE *psf, void *ptr, sf_count_t lens, convert_func 
 			{ /* skip heads if we get them */
 				continue ;
 			}
-			if (oodata->granule_shift==-1)
-			{
-				oodata->granule_shift=-2 ;
-			}
 			if (error!=0)
 			{	
 				if (error==SFE_END_OF_FILE && odata->osync.fill==0)
@@ -616,7 +581,18 @@ ogg_opus_read_sample (SF_PRIVATE *psf, void *ptr, sf_count_t lens, convert_func 
 				oodata->pcm.ptr, frame_size, 0 ) ;
 			if (ss>0)
 			{
-				oodata->pcm.len = ogg_opus_frames_to_samples (psf, ss) ;
+				sf_count_t len = len = ogg_opus_frames_to_samples (psf, ss) ;
+				/* end trimming */
+				if (odata->opacket.e_o_s)
+				{
+					sf_count_t last_sample = ogg_opus_frames_to_samples (psf ,ogg_opus_granule_to_frames (psf, odata->opacket.granulepos-oodata->preskip)) ;
+					sf_count_t max_read = last_sample-oodata->current_sample;
+					if (max_read>0 && len>max_read)
+					{
+						len = max_read ;
+					}
+				}
+				oodata->pcm.len = len ;
 			}
 			else
 			{

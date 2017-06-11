@@ -153,19 +153,24 @@ ogg_opus_open (SF_PRIVATE *psf)
 		psf->read_double = ogg_opus_read_d ;
 		if (psf->sf.seekable)
 		{
-			sf_count_t pos = psf_fseek (psf, -4096, SEEK_END) ;
+			sf_count_t pos = psf_fseek (psf, 0, SEEK_END) ;
 			for(;;)
 			{/* Seek from the back until we get a page, extract its granule */
+				if (pos<=0)
+				{
+					psf->sf.frames = SF_COUNT_MAX ;
+					break ;
+				}
+				pos-=4096 ;
+				if(pos<0)
+				{
+					pos=0;
+				}
+				psf_fseek(psf, pos, SEEK_SET) ;
 				ogg_sync_reset (&odata->osync) ;
 				error = ogg_opus_read_packet (psf, 1) ;
 				if (error==0)
 				{
-					break ;
-				}
-				pos = psf_fseek(psf, pos-4096, SEEK_SET) ;
-				if(pos<=0)
-				{
-					psf->sf.frames = SF_COUNT_MAX ;
 					break ;
 				}
 			}
@@ -296,6 +301,15 @@ ogg_opus_read_packet (SF_PRIVATE *psf, int init)
 	return SFE_MALFORMED_FILE ;
 } /* ogg_opus_read_packet */
 
+static int opus_valid_samplerates [] =
+{
+	48000,
+	24000,
+	16000,
+	12000,
+	8000,
+} ;
+
 /* Unlike vorbis_read_header, this does not support being called multiple times. It WILL leak */
 static int
 ogg_opus_read_header (SF_PRIVATE * psf, int log_data)
@@ -326,10 +340,16 @@ ogg_opus_read_header (SF_PRIVATE * psf, int log_data)
 		int channels = body[9] ;
 		psf->sf.channels = channels ;
 		oodata->preskip = (uint16_t)psf_get_le16 (body, 10) ;
-		psf->sf.samplerate = psf_get_le32 (body, 12) ;
-		if (psf->sf.samplerate<8000 || psf->sf.samplerate>1000000)
+		/* The samplerate in the decoder is just what it was encoded as, and not neccesarily decodable. */
+		int samplerate = psf_get_le32 (body, 12) ;
+		psf->sf.samplerate=48000 ;
+		for(int i=0; i<ARRAY_LEN(opus_valid_samplerates); i++)
 		{
-			psf->sf.samplerate = 48000 ;
+			if (samplerate==opus_valid_samplerates[i])
+			{
+				psf->sf.samplerate=samplerate ;
+				break ;
+			}
 		}
 		oodata->current_sample=-ogg_opus_frames_to_samples (psf, ogg_opus_granule_to_frames (psf, oodata->preskip)) ;
 
@@ -536,7 +556,7 @@ ogg_opus_convert_error (SF_PRIVATE *psf, int error)
 		case OPUS_ALLOC_FAIL:
 			return SFE_MALLOC_FAILED ;
 		default:
-			return SFE_INTERNAL ;
+			return SFE_UNIMPLEMENTED ;
 	}
 } /* ogg_opus_convert_error */
 

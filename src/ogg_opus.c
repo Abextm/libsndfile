@@ -77,7 +77,7 @@ typedef struct
 
 
 static int	ogg_opus_close (SF_PRIVATE *psf) ;
-static int	ogg_opus_read_header (SF_PRIVATE *psf, int log_data) ;
+static int	ogg_opus_read_header (SF_PRIVATE *psf) ;
 static sf_count_t	ogg_opus_seek (SF_PRIVATE *psf, int mode, sf_count_t offset) ;
 
 static sf_count_t	ogg_opus_granule_to_frames (SF_PRIVATE *psf, sf_count_t granule) ;
@@ -135,7 +135,7 @@ ogg_opus_open (SF_PRIVATE *psf)
 		}
 
 		/* Read OpusHead and OpusTags */
-		if ((error = ogg_opus_read_header (psf, 1)))
+		if ((error = ogg_opus_read_header (psf)))
 		{
 			return error ;
 		}
@@ -356,7 +356,7 @@ static struct {
 
 /* Unlike vorbis_read_header, this does not support being called multiple times. It WILL leak */
 static int
-ogg_opus_read_header (SF_PRIVATE * psf, int log_data)
+ogg_opus_read_header (SF_PRIVATE * psf)
 {
 	OGG_PRIVATE *odata = (OGG_PRIVATE *) psf->container_data ;
 	OPUS_PRIVATE *oodata = (OPUS_PRIVATE *) psf->codec_data ;
@@ -456,7 +456,8 @@ ogg_opus_read_header (SF_PRIVATE * psf, int log_data)
 		{
 			return error;
 		}
-		if (odata->opacket.bytes<12 || memcmp (odata->opacket.packet, "OpusTags", 8)!=0)
+		sf_count_t tl = odata->opacket.bytes ;
+		if (tl<12 || memcmp (odata->opacket.packet, "OpusTags", 8)!=0)
 		{
 			psf_log_printf (psf, "Error reading opus tags packet.\n") ;
 			return SFE_MALFORMED_FILE ;
@@ -467,6 +468,10 @@ ogg_opus_read_header (SF_PRIVATE * psf, int log_data)
 		{
 			int len = psf_get_le32(body, ofs) ;
 			ofs+=4 ;
+			if (tl<ofs+len+4)
+			{
+				return SFE_MALFORMED_FILE ;
+			}
 			char *tb = calloc (len+1, 1) ;
 			memcpy (tb, body+ofs, len) ;
 			psf_store_string (psf, SF_STR_SOFTWARE, tb) ;
@@ -478,8 +483,16 @@ ogg_opus_read_header (SF_PRIVATE * psf, int log_data)
 		/* Set of count 'KEY=VALUE' pairs */
 		for (int i=0; i<count; i++)
 		{
+			if (tl<ofs+4)
+			{
+				return SFE_MALFORMED_FILE ;
+			}
 			int len = psf_get_le32(body, ofs) ;
 			ofs+=4 ;
+			if (tl<ofs+len)
+			{
+				return SFE_MALFORMED_FILE ;
+			}
 			int type=0 ;
 			int klen=0 ;
 			for (int ii=0; ii<ARRAY_LEN(opus_tag_map); ii++)

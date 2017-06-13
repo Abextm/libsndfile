@@ -70,6 +70,9 @@ typedef struct
 	/* Current position. This is set so 0 is the first sample after,
 	   the preskip*/
 	sf_count_t current_sample ;
+	/* How many granules are missing from the front of the stream.
+     Not filled when not seekable*/
+	sf_count_t pre_roll;
 } OPUS_PRIVATE ;
 
 
@@ -153,6 +156,22 @@ ogg_opus_open (SF_PRIVATE *psf)
 		psf->read_double = ogg_opus_read_d ;
 		if (psf->sf.seekable)
 		{
+			sf_count_t frames = 0 ;
+			for(;;)
+			{
+				error = ogg_opus_read_packet (psf, 0) ;
+				if (error!=0)
+				{
+					return error ;
+				}
+				frames += opus_packet_get_nb_frames (odata->opacket.packet, odata->opacket.bytes)
+					*opus_packet_get_samples_per_frame (odata->opacket.packet, psf->sf.samplerate) ;
+				if (odata->opacket.granulepos>=0)
+				{
+					oodata->pre_roll = ogg_opus_granule_to_frames (psf, odata->opacket.granulepos) - frames;
+					break ;
+				}
+			}
 			sf_count_t pos = psf_fseek (psf, 0, SEEK_END) ;
 			for(;;)
 			{/* Seek from the back until we get a page, extract its granule */
@@ -180,7 +199,7 @@ ogg_opus_open (SF_PRIVATE *psf)
 				{
 					break ;
 				}
-				psf->sf.frames = ogg_opus_granule_to_frames (psf, odata->opacket.granulepos-oodata->preskip) ;
+				psf->sf.frames = ogg_opus_granule_to_frames (psf, odata->opacket.granulepos)-oodata->pre_roll ;
 				error = ogg_opus_read_packet (psf, 0);
 			}
 			oodata->current_sample = ogg_opus_frames_to_samples (psf, psf->sf.frames) ;
@@ -255,7 +274,6 @@ ogg_opus_read_packet (SF_PRIVATE *psf, int init)
 {
 	static const int CHUNK_SIZE = 16384;
 	OGG_PRIVATE *odata = (OGG_PRIVATE *) psf->container_data ;
-	OPUS_PRIVATE *oodata = (OPUS_PRIVATE *) psf->codec_data ;
 	int error = 0 ;
 	for (int i=0;i<100;i++)
 	{
@@ -286,11 +304,11 @@ ogg_opus_read_packet (SF_PRIVATE *psf, int init)
 		/* feed more data in */
 		char *buffer = ogg_sync_buffer (&odata->osync, CHUNK_SIZE) ;
 		size_t read = psf_fread (buffer, 1, CHUNK_SIZE, psf) ;
-		error = ogg_sync_wrote (&odata->osync, read) ;
 		if (read<=0)
 		{
 			return SFE_END_OF_FILE ;
 		}
+		error = ogg_sync_wrote (&odata->osync, read) ;
 		if (error!=0)
 		{
 			break ;
@@ -310,6 +328,32 @@ static int opus_valid_samplerates [] =
 	8000,
 } ;
 
+enum
+{
+	R128_TRACK_GAIN = -1,
+	R128_ALBUM_GAIN = -2
+} ;
+
+static struct {
+	int type ;
+	const char *key ;
+	int len ;
+} opus_tag_map [] = {
+	#define I( TYPE , STR ) { TYPE , STR , sizeof( STR ) -1 }
+	I (R128_TRACK_GAIN,    "R128_TRACK_GAIN=" ),
+	I (R128_ALBUM_GAIN,    "R128_ALBUM_GAIN=" ),
+	I (SF_STR_TITLE,       "TITLE="           ),
+	I (SF_STR_COPYRIGHT,   "COPYRIGHT="       ),
+	I (SF_STR_ARTIST,      "ARTIST="          ),
+	I (SF_STR_COMMENT,     "DESCRIPTION="     ),
+	I (SF_STR_DATE,        "DATE="            ),
+	I (SF_STR_ALBUM,       "ALBUM="           ),
+	I (SF_STR_LICENSE,     "LICENSE="         ),
+	I (SF_STR_TRACKNUMBER, "TRACKNUMBER="     ),
+	I (SF_STR_GENRE,       "GENRE="           ),
+	#undef I
+} ;
+
 /* Unlike vorbis_read_header, this does not support being called multiple times. It WILL leak */
 static int
 ogg_opus_read_header (SF_PRIVATE * psf, int log_data)
@@ -317,7 +361,7 @@ ogg_opus_read_header (SF_PRIVATE * psf, int log_data)
 	OGG_PRIVATE *odata = (OGG_PRIVATE *) psf->container_data ;
 	OPUS_PRIVATE *oodata = (OPUS_PRIVATE *) psf->codec_data ;
 	int error = 0 ;
-
+	int16_t gain = 0;
 	/* OpusHead */
 	{
 		if((error=ogg_opus_read_packet (psf, 1)))
@@ -332,16 +376,21 @@ ogg_opus_read_header (SF_PRIVATE * psf, int log_data)
 		unsigned char *body = odata->opacket.packet;
 		/* Version */
 		unsigned char version = body[8] ;
-		if (version&0xF0==0)
+		if ((version&0xF0)!=0)
 		{
-			psf_log_printf (psf, "Opus version %d is not implemented.\n ", (int)(body[8])) ;
+			psf_log_printf (psf, "Opus version %d is not implemented.\n", (int)(body[8])) ;
 			return SFE_UNIMPLEMENTED ;
 		}
 		int channels = body[9] ;
 		psf->sf.channels = channels ;
 		oodata->preskip = (uint16_t)psf_get_le16 (body, 10) ;
-		/* The samplerate in the decoder is just what it was encoded as, and not neccesarily decodable. */
-		int samplerate = psf_get_le32 (body, 12) ;
+		/* The samplerate in the header is just what it was encoded as, and not neccesarily decodable.
+		   This allows the samplerate to be set in the SF_INFO struct */
+		int samplerate = psf->sf.samplerate ;
+		if (samplerate==0)
+		{
+			samplerate = psf_get_le32 (body, 12) ;
+		}
 		psf->sf.samplerate=48000 ;
 		for(int i=0; i<ARRAY_LEN(opus_valid_samplerates); i++)
 		{
@@ -353,7 +402,7 @@ ogg_opus_read_header (SF_PRIVATE * psf, int log_data)
 		}
 		oodata->current_sample=-ogg_opus_frames_to_samples (psf, ogg_opus_granule_to_frames (psf, oodata->preskip)) ;
 
-		int32_t raw_gain = psf_get_le16 (body, 16) ;
+		gain = psf_get_le16 (body, 16) ;
 
 		char channel_map_family = body[18] ;
 		int streams ;
@@ -399,8 +448,6 @@ ogg_opus_read_header (SF_PRIVATE * psf, int log_data)
 		if (error!=OPUS_OK) {
 			return ogg_opus_convert_error (psf, error) ;
 		}
-		/* this survives a decoder reset, so don't save it anywhere */
-		opus_multistream_decoder_ctl (oodata->dec, OPUS_SET_GAIN(raw_gain));
 	}
 	psf_log_printf (psf, "Bitstream is %d channel, %d Hz\n", psf->sf.channels, psf->sf.samplerate) ;
 	/* OpusTags */
@@ -415,8 +462,59 @@ ogg_opus_read_header (SF_PRIVATE * psf, int log_data)
 			return SFE_MALFORMED_FILE ;
 		}
 		unsigned char *body = odata->opacket.packet;
+		int ofs = 8 ;
+		/* encoder string */
+		{
+			int len = psf_get_le32(body, ofs) ;
+			ofs+=4 ;
+			char *tb = calloc (len+1, 1) ;
+			memcpy (tb, body+ofs, len) ;
+			psf_store_string (psf, SF_STR_SOFTWARE, tb) ;
+			free (tb) ;
+			ofs+=len ;
+		}
+		int count = psf_get_le32(body, ofs) ;
+		ofs+=4 ;
+		/* Set of count 'KEY=VALUE' pairs */
+		for (int i=0; i<count; i++)
+		{
+			int len = psf_get_le32(body, ofs) ;
+			ofs+=4 ;
+			int type=0 ;
+			int klen=0 ;
+			for (int ii=0; ii<ARRAY_LEN(opus_tag_map); ii++)
+			{
+				if (len>=opus_tag_map[ii].len && memcmp (opus_tag_map[ii].key, body+ofs, opus_tag_map[ii].len)==0)
+				{
+					type = opus_tag_map[ii].type ;
+					klen = opus_tag_map[ii].len ;
+					break ;
+				}
+			}
+			int alen=len-klen ;
+			if (type!=0)
+			{
+				/* Get the part after the key */
+				char *tb = calloc (alen+1, 1) ;
+				memcpy (tb, body+ofs+klen, alen) ;
+				if (type<0)
+				{
+					gain += strtol(tb,NULL,10) ;
+				}
+				else
+				{
+					psf_store_string (psf, SF_STR_SOFTWARE, tb) ;
+				}
+				free (tb) ;
+			}
+			ofs+=len ;
+		}
+		
+		//psf->strings.data[0].type=SF_STR_
 		/* TODO: implement reading tags */
 	}
+	/* this survives a decoder reset, so don't save it anywhere */
+	opus_multistream_decoder_ctl (oodata->dec, OPUS_SET_GAIN(gain));
 	return 0 ;
 } /* ogg_opus_read_header */
 
@@ -442,8 +540,8 @@ ogg_opus_seek (SF_PRIVATE *psf, int UNUSED (filemode), sf_count_t newpos)
 {
 	OGG_PRIVATE *odata = (OGG_PRIVATE *) psf->container_data ;
 	OPUS_PRIVATE *oodata = (OPUS_PRIVATE *) psf->codec_data ;
-	int error = 0 ;
 	sf_count_t orig_newpos = newpos;
+
 
 	if (newpos<0)
 	{
@@ -479,7 +577,7 @@ ogg_opus_seek (SF_PRIVATE *psf, int UNUSED (filemode), sf_count_t newpos)
 			float framesize = (float)(fipos-oodata->last_start)/(float)ogg_opus_samples_to_frames (psf, oodata->samples_decoded) ;
 			newpos-=skip ;
 			/* calculate approx bytes to move*/
-			sf_count_t delta = (float)((ogg_opus_granule_to_frames (psf, odata->opacket.granulepos-oodata->preskip))-newpos)*framesize ;
+			sf_count_t delta = (float)((ogg_opus_granule_to_frames (psf, odata->opacket.granulepos)-oodata->pre_roll)-newpos)*framesize ;
 			newfipos = fipos - delta ;
 		}
 		for (;;)
@@ -492,6 +590,7 @@ ogg_opus_seek (SF_PRIVATE *psf, int UNUSED (filemode), sf_count_t newpos)
 			oodata->last_start = psf_fseek (psf, newfipos, SEEK_SET) ;
 			oodata->pcm.start = 0 ;
 			oodata->pcm.len = 0 ;
+			oodata->samples_decoded=0 ;
 			ogg_sync_reset (&odata->osync) ;
 			opus_multistream_decoder_ctl (oodata->dec, OPUS_RESET_STATE) ;
 			
@@ -516,9 +615,8 @@ ogg_opus_seek (SF_PRIVATE *psf, int UNUSED (filemode), sf_count_t newpos)
 					break ;
 				}
 				/* read the whole page, so the granule is where we start decoding, */
-				for (;ogg_stream_packetout (&odata->ostream, &odata->opacket)==1;)
-				oodata->samples_decoded=0 ;
-				sf_count_t current_frame = ogg_opus_granule_to_frames (psf, odata->opacket.granulepos-oodata->preskip) ;
+				for (;ogg_stream_packetout (&odata->ostream, &odata->opacket)==1;) ;
+				sf_count_t current_frame = ogg_opus_granule_to_frames (psf, odata->opacket.granulepos)-oodata->pre_roll ;
 				oodata->current_sample=ogg_opus_frames_to_samples (psf, current_frame) ;
 
 				if (current_frame<=newpos)
@@ -536,7 +634,7 @@ ogg_opus_seek (SF_PRIVATE *psf, int UNUSED (filemode), sf_count_t newpos)
 	{
 		ogg_opus_read_sample (psf, NULL, consume, opus_rnull) ;
 	}
-	sf_count_t newloc = ogg_opus_samples_to_frames (psf, oodata->current_sample)-ogg_opus_granule_to_frames (psf, oodata->preskip) ;
+	sf_count_t newloc = ogg_opus_samples_to_frames (psf, oodata->current_sample) ;
 	return newloc ;
 } /* ogg_opus_seek */
 
@@ -567,10 +665,10 @@ ogg_opus_read_sample (SF_PRIVATE *psf, void *ptr, sf_count_t lens, convert_func 
 	OPUS_PRIVATE *oodata = (OPUS_PRIVATE *) psf->codec_data ;
 	int error = 0 ;
 	sf_count_t read = 0 ;
+	/* 120ms is maximum opus frame size */
 	sf_count_t frame_size = (psf->sf.samplerate*120)/1000;
 	if (oodata->pcm.ptr==NULL)
-	{ /* TODO: try to calculate how many samples we actually need
-	     Currently this is just the maximum possible by spec */
+	{ 
 		sf_count_t cap = psf->sf.channels * frame_size ;
 		oodata->pcm.ptr = calloc (cap, sizeof (float)) ;
 		oodata->pcm.capacity = cap ;
@@ -601,13 +699,13 @@ ogg_opus_read_sample (SF_PRIVATE *psf, void *ptr, sf_count_t lens, convert_func 
 				oodata->pcm.ptr, frame_size, 0 ) ;
 			if (ss>0)
 			{
-				sf_count_t len = len = ogg_opus_frames_to_samples (psf, ss) ;
+				sf_count_t len = ogg_opus_frames_to_samples (psf, ss) ;
 				/* end trimming */
 				if (odata->opacket.e_o_s)
 				{
-					sf_count_t last_sample = ogg_opus_frames_to_samples (psf ,ogg_opus_granule_to_frames (psf, odata->opacket.granulepos-oodata->preskip)) ;
+					sf_count_t last_sample = ogg_opus_frames_to_samples (psf, ogg_opus_granule_to_frames (psf, odata->opacket.granulepos)-oodata->pre_roll) ;
 					sf_count_t max_read = last_sample-oodata->current_sample;
-					if (max_read>0 && len>max_read)
+					if (max_read>=0 && len>max_read)
 					{
 						len = max_read ;
 					}
@@ -631,6 +729,8 @@ ogg_opus_read_sample (SF_PRIVATE *psf, void *ptr, sf_count_t lens, convert_func 
 		read += len ;
 		oodata->samples_decoded += len ; 
 		oodata->current_sample += len ; 
+		if(odata->opacket.granulepos>=0){
+		}
 		if (read >= lens)
 		{
 			return read ;
@@ -639,7 +739,7 @@ ogg_opus_read_sample (SF_PRIVATE *psf, void *ptr, sf_count_t lens, convert_func 
 } /* ogg_opus_read_sample */
 
 static void
-opus_rnull (SF_PRIVATE *psf, void *out, sf_count_t read, float *in, sf_count_t start, sf_count_t len)
+opus_rnull (SF_PRIVATE *UNUSED(psf), void *UNUSED(out), sf_count_t UNUSED(read), float *UNUSED(in), sf_count_t UNUSED(start), sf_count_t UNUSED(len))
 {
 } /* opus_rnull */
 
